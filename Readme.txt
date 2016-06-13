@@ -1,0 +1,1 @@
+The Above programs were made for the Artificial Intelligence class at CUNY York. The side project of using the output from the 8 Puzzle Matrix solver was done as a personal side project as a means to get free requision points in Halo 5 and to test the algorithm.

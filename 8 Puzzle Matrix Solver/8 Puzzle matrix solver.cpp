@@ -1,0 +1,362 @@
+//8 Puzzle Project.................................................................................................
+//CS377 8_puzzle_matrix Copyright (c) 2016 Aleem Anula, Barindra Narinesingh and Willy William. All rights reserved.
+//Code works in Dev-C++ 5.11 and XCode. It sometimes works in Visual Studios Express 2015 when solving for simple 8 puzzles.
+//Code uses 3x3 Matrix as an object with a string list to maintain best f(n)
+//Reference Rajt Shah tutor, CS 226 princeton slides and CUNY YORK CS 377 slides. 
+//Our code uses the direct approach to solving the 8 puzzle using the A star algorithm 
+
+#include<iostream>
+#include<queue>
+#include <ctime>
+#include<algorithm>
+#include<sstream>
+#include<map>
+#include<list>
+#include<string>
+
+using namespace std;
+
+typedef struct node_object
+{
+     int matrix[3][3];     // with number 0 as blank tile
+
+     int g_n;
+     int h_n;            //used function for herustic value and manhatten distance
+
+     int f_n;            //f(n)=g(n)+h(n)
+
+	 string move_d;		//move direction left unused as future update
+	 string move_c;		//move choice left unused as future update
+	 
+     node_object * parent;  //pointer to the parent node
+
+} node;
+
+
+node* makeABox(node *object)// Making a empty 8 puzzle object 
+{
+     node *new_box = new node;
+     for (int x = 0; x<3; x++)
+          for (int y = 0; y<3; y++)
+               new_box->matrix[x][y] = object->matrix[x][y];
+     return new_box;
+}
+
+
+struct compare_L_to_R
+{
+     bool operator()(node* left, node* right) const
+     {
+          return (left->f_n > right->f_n) || (left->f_n == right->f_n && left->f_n > right->f_n);
+     }
+};
+
+
+void man_dist(node *object)    // Manhatten distance calculator
+{
+     int cell = 0;
+     int M_dist = 0;
+
+     for (int x = 0; x<3; x++)
+          for (int y = 0; y < 3; y++) {
+               if (cell && object->matrix[x][y] != cell)        //Blank is in the wrong location
+                    M_dist = M_dist + abs((x - ((object->matrix[x][y]) / 3)) + (y - ((object->matrix[x][y]) % 3)));
+               cell++;
+          }
+     object->h_n= M_dist;   // |x2-x1| + |y2-y1|
+}
+
+
+void show_matrix(node *object)         //    displays matrix
+{
+     cout << "" << endl << "............." << endl;
+
+     for (int x = 0; x<3; x++)
+     {
+          cout << ": ";
+
+          for (int y = 0; y<3; y++)
+          {
+               if (object->matrix[x][y])
+                    cout << "" << object->matrix[x][y] << " : ";
+               else
+                    cout << " " << " : ";
+          }
+
+          cout << "" << endl << "............." << endl;
+     }
+     cout << "" << endl << "--------------" << endl;
+}
+
+
+
+
+bool is_Goal_state(node* object)        //compare object to generated goal state
+{
+     int cell = 1;
+     for (int x = 0; x<3; x++)
+          for (int y = 0; y<3; y++, cell++)    
+               if (x != 2 || y != 2)
+                    if (object->matrix[x][y] != cell)
+                         return false;
+
+     return true;
+}
+
+
+list<node*> create_child(node *object)        //generates children
+{
+     list<node*> child;
+     node * p;
+
+     int empty_x = -1;
+     int    empty_y = -1;
+
+     for (int x = 0; x<3; x++)
+          for (int y = 0; y<3; y++)
+               if (object->matrix[x][y] == 0)        //looks for the blank in the matrix
+               {
+                    empty_x = x;
+                    empty_y = y;
+               }
+     if (empty_x != -1 && empty_y != -1)          // [x][y] of blank cell
+     {
+          if (empty_x - 1 != -1)                     // move left
+          {
+               p = makeABox(object);
+               swap(p->matrix[empty_x][empty_y], p->matrix[empty_x - 1][empty_y]);
+               object->move_d +="left ";		//left unused for future update
+			   child.push_back(p);
+          		
+          		
+		  }
+          if (empty_x + 1 != 3)                  //move right
+          {
+               p = makeABox(object);
+               swap(p->matrix[empty_x][empty_y], p->matrix[empty_x + 1][empty_y]);
+               object->move_d +="right ";		//left unused for future update
+			   child.push_back(p);
+          
+		  }
+          if (empty_y - 1 != -1)                      //move up
+          {
+               p = makeABox(object);
+               swap(p->matrix[empty_x][empty_y], p->matrix[empty_x][empty_y - 1]);
+               object->move_d +="up ";				//left unused for future update
+			   child.push_back(p);
+          
+		  }
+          if (empty_y + 1 != 3)                    //move down
+          {
+               p = makeABox(object);
+               swap(p->matrix[empty_x][empty_y], p->matrix[empty_x][empty_y + 1]);
+               object->move_d +="down ";			//left unused for future update
+			   child.push_back(p);
+          
+		  }
+     }
+     return child;
+}
+
+string put_string(node *object)                // converts matrix into a string then puts it in puzzleString
+{
+     string puzzleString = "";
+     ostringstream output_stream;
+     for (int x = 0; x<3; x++)
+     {
+          for (int y = 0; y<3; y++)
+          {
+               output_stream << object->matrix[x][y];
+               puzzleString += output_stream.str();
+          }
+     }
+     return puzzleString;
+}
+
+
+map<string, int> CLOSED_PATH;    //default constructor for map, Holds the closed list
+
+int functionAstar(node *object)                                        // A* algorithm
+{
+     int n_moves = 0;
+
+     priority_queue< node*, vector<node*>, compare_L_to_R > OPEN_STATE; //used to maintain matrixs with most recent at top
+
+     OPEN_STATE.push(object);
+     string puzzleString;
+     list<node*> child;
+     while (!OPEN_STATE.empty() && CLOSED_PATH.size() <= 181440) // 9! / 2 ==181440 Max combinations possible
+     {
+          node* child_x = OPEN_STATE.top();                          //node with the least f(n)
+          OPEN_STATE.pop();
+          puzzleString = put_string(child_x);
+          CLOSED_PATH[puzzleString] = 1;
+
+          if (is_Goal_state(child_x))                                    //looking for goal state
+          {
+
+               cout << "Printing states starting with goal state and ending with start state: " << endl << endl;
+
+               while (child_x != NULL)        //traverses list starting at last child then going back until root
+               {
+                    show_matrix(child_x);
+														
+					child_x = child_x->parent;
+                    n_moves++;
+               }
+              
+               return (n_moves - 1);
+          }
+
+          else
+          {
+               child = create_child(child_x);
+               while (!child.empty())
+               {
+                    node* p = makeABox(child.front());
+                    p->parent = child_x;
+                    
+                    man_dist(p);
+                    p->f_n = (child_x->g_n) + 1 + p->h_n;
+                    p->g_n = (child_x->g_n) + 1;
+                    string puzzleString = put_string(p);
+
+                    if (!CLOSED_PATH[puzzleString])
+                         OPEN_STATE.push(p);
+
+                    child.pop_front();
+               }
+          }
+     }
+     return n_moves;
+}
+
+
+bool solvable(node* object)             //is it solvable? inversion used to test
+{
+     int empty_cell = 0;
+     int n_inversions = 0;
+     int a[9] = {};
+     int z = 0;
+
+     for (int x = 0; x < 3; x++)
+          for (int y = 0; y < 3; y++) {
+               if (object->matrix[x][y] == 0)
+                    empty_cell = x;
+
+               a[z] = object->matrix[x][y];
+               z++;
+          }
+
+     for (int x = 0; x<9; x++)
+          for (int y = x + 1; y<9; y++)
+               if (a[x] && a[y] && a[x]>a[y])
+                    n_inversions++;
+
+     if (n_inversions % 2 == 0)                    // uses inversion help find if there is a solution or not.
+          return true;
+     else
+     {
+          cout << "Hueristic value is odd : " << n_inversions << endl;
+          return false;
+     }
+}
+
+int main()
+{
+     cout << "--------------" << endl;
+     cout << "Welcome to the 8 puzzle solver!" << endl << endl;
+
+     clock_t start_t;
+
+     node *object = new node;    // new node object to hold matrix
+     int moves_made = 0;
+
+     object->parent = NULL;
+
+     cout << "Enter your matrix to solve : " << endl << endl;
+
+
+     for (int x = 0; x<3; x++)
+          for (int y = 0; y<3; y++)
+               cin >> (object->matrix[x][y]);
+
+     /*    solvable:
+
+     0;1;3
+     4;2;5
+     7;8;6
+
+     7;2;4
+     5;0;6
+     8;3;1
+
+     1;2;3
+     5;4;6
+     8;7;0
+
+     not solvable:
+
+     1;2;3
+     4;5;6
+     8;7;0
+
+     5;1;8
+     0;2;3
+     4;6;7
+
+     object->matrix[0][0] = 0;
+     object->matrix[0][1] = 6;
+     object->matrix[0][2] = 8;
+
+     object->matrix[1][0] = 1;
+     object->matrix[1][1] = 7;
+     object->matrix[1][2] = 4;
+
+     object->matrix[2][0] = 5;
+     object->matrix[2][1] = 3;
+     object->matrix[2][2] = 2;
+     */
+
+
+     cout << "" << endl;
+     object->g_n = 0;
+     man_dist(object);
+     object->f_n = (object->h_n) + (object->g_n);       //initialize object f(n)=h(n)+g(n)
+     
+
+
+     show_matrix(object);
+
+     start_t = clock();
+     if (solvable(object) != false) {
+
+          moves_made = functionAstar(object);
+
+		cout<<" "<<endl;
+          cout << "Total moves made : " << moves_made << endl;
+          cout << "Total states (start state+ states traversed + goal state): " << moves_made + 1 << endl;
+
+          cout << "Total nodes traversed looking for goal state: " << CLOSED_PATH.size() << endl << endl;
+
+          cout << "Total websites looked at trying to figure out how to get this code to work" << endl;
+          cout << " = 21 a day * 7 days a week * 8 weeks" << endl;
+          cout << " = 1176 websites " << endl;
+
+     }
+     else
+          cout << "\nPuzzle unsolvable!!! the goal state is not reachable! " << endl << endl;
+
+
+
+     cout << "\nTime taken for process to complete: " << ((float)(clock() - start_t) / (float)CLOCKS_PER_SEC) << " seconds. " << endl << endl << endl;
+
+
+
+     cout << "End of Program................." << endl << endl;
+     system("pause");
+     return 0;
+
+
+
+}

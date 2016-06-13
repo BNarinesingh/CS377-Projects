@@ -1,0 +1,1 @@
+Program to design a NxN Board them place N queens on the board in an intelligent manner using backtracking.
